@@ -1,0 +1,163 @@
+# ====================================================================
+# Deploy Pipeline - Option B: Branch-Matched Deployment
+# ====================================================================
+# This pipeline is manually triggered and automatically detects which branch
+# it's running on, then downloads the latest artifact from that same branch.
+#
+# KEY CONCEPT: By using Build.SourceBranchName with buildVersionToDownload:
+# 'latestFromBranch', we ensure we get the most recent artifact from the
+# SAME branch this pipeline is running on. This is useful when you want to
+# deploy a specific branch by running the pipeline from that branch.
+#
+# USAGE: Run this pipeline from any branch (main, develop, feature/*, etc.)
+# and it will automatically deploy the latest build from that branch.
+
+# Manual trigger only - no automatic triggers
+trigger: none
+
+# No PR triggers
+pr: none
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  # The artifact name must match what the build pipeline published
+  artifactName: 'drop'
+
+stages:
+  - stage: Deploy
+    displayName: 'Deploy Stage'
+    jobs:
+      - job: DeployJob
+        displayName: 'Download and Deploy Artifact'
+        steps:
+          # Display deployment parameters
+          - task: Bash@3
+            displayName: 'Show Deployment Configuration'
+            inputs:
+              targetType: 'inline'
+              script: |
+                echo "========================================="
+                echo "BRANCH-MATCHED DEPLOYMENT CONFIGURATION"
+                echo "========================================="
+                echo "Current pipeline branch: $(Build.SourceBranchName)"
+                echo "Full branch reference: $(Build.SourceBranch)"
+                echo "Artifact to download: $(artifactName)"
+                echo ""
+                echo "This deployment will download the LATEST successful"
+                echo "build artifact from branch: $(Build.SourceBranchName)"
+                echo ""
+                echo "To deploy a different branch, run this pipeline"
+                echo "from that branch in Azure DevOps."
+                echo "========================================="
+
+          # Download the latest artifact from the current branch
+          - task: DownloadPipelineArtifact@2
+            displayName: 'Download Latest Artifact from Current Branch'
+            inputs:
+              # CRITICAL: buildType 'specific' allows us to specify parameters
+              buildType: 'specific'
+              
+              # Reference the build pipeline
+              project: '$(System.TeamProject)'
+              definition: 'build-pipeline'  # The build pipeline name
+              
+              # CRITICAL: Download the latest successful build from the current branch
+              # Build.SourceBranch already includes the full ref path (refs/heads/branch-name)
+              # This ensures we get artifacts from the SAME branch this pipeline is running on
+              buildVersionToDownload: 'latestFromBranch'
+              branchName: '$(Build.SourceBranch)'
+              # Examples of Build.SourceBranch values:
+              #   refs/heads/main
+              #   refs/heads/develop
+              #   refs/heads/feature/new-feature
+              
+              # The artifact name to download
+              artifactName: '$(artifactName)'
+              
+              # Where to download the artifact to
+              targetPath: '$(Pipeline.Workspace)/downloaded-artifact'
+              
+              # Optional: Add tags to filter builds (e.g., only download from builds with specific tags)
+              # tags: 'Release'
+
+          # Verify and display the downloaded artifact contents
+          - task: Bash@3
+            displayName: 'Verify Downloaded Artifact'
+            inputs:
+              targetType: 'inline'
+              script: |
+                echo "========================================="
+                echo "ARTIFACT VERIFICATION"
+                echo "========================================="
+                echo "Downloaded artifact contents:"
+                ls -la $(Pipeline.Workspace)/downloaded-artifact/
+                echo ""
+                echo "========================================="
+                echo "BUILD INFO FROM ARTIFACT:"
+                echo "========================================="
+                cat $(Pipeline.Workspace)/downloaded-artifact/build-info.txt
+                echo ""
+                echo "========================================="
+                echo "VERIFICATION SUMMARY:"
+                echo "========================================="
+                echo "✓ Current pipeline branch: $(Build.SourceBranchName)"
+                echo "✓ Downloaded latest successful build from: $(Build.SourceBranch)"
+                echo ""
+                echo "The build info above should show:"
+                echo "  - Branch Name: $(Build.SourceBranchName)"
+                echo ""
+                echo "This confirms we downloaded the artifact from the correct branch."
+                echo "========================================="
+
+          # Extract and verify branch name from artifact
+          - task: Bash@3
+            displayName: 'Validate Branch Match'
+            inputs:
+              targetType: 'inline'
+              script: |
+                # Extract the branch name from the build-info.txt file
+                ARTIFACT_BRANCH=$(grep "Branch Name:" $(Pipeline.Workspace)/downloaded-artifact/build-info.txt | cut -d':' -f2 | xargs)
+                CURRENT_BRANCH="$(Build.SourceBranchName)"
+                
+                echo "========================================="
+                echo "BRANCH VALIDATION"
+                echo "========================================="
+                echo "Current pipeline branch: $CURRENT_BRANCH"
+                echo "Artifact branch:         $ARTIFACT_BRANCH"
+                echo ""
+                
+                if [ "$ARTIFACT_BRANCH" == "$CURRENT_BRANCH" ]; then
+                  echo "✓ SUCCESS: Branch names match!"
+                  echo "✓ We have the correct artifact from the current branch."
+                else
+                  echo "✗ WARNING: Branch names don't match!"
+                  echo "✗ This might indicate a configuration issue."
+                  echo "✗ Expected: $CURRENT_BRANCH"
+                  echo "✗ Got: $ARTIFACT_BRANCH"
+                  exit 1
+                fi
+                echo "========================================="
+
+          # Simulate deployment step
+          - task: Bash@3
+            displayName: 'Deploy Application'
+            inputs:
+              targetType: 'inline'
+              script: |
+                echo "========================================="
+                echo "DEPLOYING APPLICATION"
+                echo "========================================="
+                echo "Deploying latest artifact from branch: $(Build.SourceBranchName)"
+                echo ""
+                
+                # In a real scenario, this is where you would:
+                # - Deploy to Azure App Service
+                # - Deploy to Kubernetes
+                # - Copy files to servers
+                # - Run database migrations
+                # - etc.
+                
+                echo "Deployment completed successfully!"
+                echo "========================================="

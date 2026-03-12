@@ -1,0 +1,89 @@
+# ====================================================================
+# Build Pipeline - Produces artifacts for each branch
+# ====================================================================
+# This pipeline builds on every branch and publishes a branch-specific
+# artifact that can be consumed by deployment pipelines.
+
+trigger:
+  # Trigger on all branches - each branch build produces its own artifact
+  branches:
+    include:
+      - '*'
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+# Use predefined variables to identify the source branch and build
+variables:
+  artifactName: 'drop'
+
+stages:
+  - stage: Build
+    displayName: 'Build Stage'
+    jobs:
+      - job: BuildJob
+        displayName: 'Build and Publish Artifact'
+        steps:
+          # Build step - simulates actual build process
+          - task: Bash@3
+            displayName: 'Build Application'
+            inputs:
+              targetType: 'inline'
+              script: |
+                echo "========================================="
+                echo "Building application from branch: $(Build.SourceBranchName)"
+                echo "Build ID: $(Build.BuildId)"
+                echo "Build Number: $(Build.BuildNumber)"
+                echo "========================================="
+                
+                # Create output directory
+                mkdir -p $(Build.ArtifactStagingDirectory)/app
+                
+                # Create a build manifest file that clearly identifies this build
+                # This makes it easy to verify which branch's artifact was downloaded
+                cat > $(Build.ArtifactStagingDirectory)/app/build-info.txt << EOF
+                ==========================================
+                BUILD INFORMATION
+                ==========================================
+                Branch Name: $(Build.SourceBranchName)
+                Branch: $(Build.SourceBranch)
+                Build ID: $(Build.BuildId)
+                Build Number: $(Build.BuildNumber)
+                Build Timestamp: $(Build.BuildNumber)
+                Repository: $(Build.Repository.Name)
+                Commit: $(Build.SourceVersion)
+                ==========================================
+                
+                This artifact was built from branch: $(Build.SourceBranchName)
+                
+                If you're seeing this file, you've successfully downloaded
+                the artifact from the correct branch/build!
+                ==========================================
+                EOF
+                
+                # Simulate additional build output
+                echo "Application v1.0.0" > $(Build.ArtifactStagingDirectory)/app/version.txt
+                echo "Build completed successfully from $(Build.SourceBranchName)" > $(Build.ArtifactStagingDirectory)/app/status.txt
+
+          # Display what we're about to publish
+          - task: Bash@3
+            displayName: 'Show Artifact Contents'
+            inputs:
+              targetType: 'inline'
+              script: |
+                echo "Contents of artifact to be published:"
+                ls -la $(Build.ArtifactStagingDirectory)/app/
+                echo ""
+                echo "Build info content:"
+                cat $(Build.ArtifactStagingDirectory)/app/build-info.txt
+
+          # Publish the artifact
+          # This artifact is tagged with the Build.BuildId, making it unique per build
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish Pipeline Artifact'
+            inputs:
+              targetPath: '$(Build.ArtifactStagingDirectory)/app'
+              artifact: '$(artifactName)'
+              publishLocation: 'pipeline'
+            # Each build (even on the same branch) creates a uniquely identified artifact
+            # The artifact is associated with this specific Build.BuildId

@@ -1,0 +1,127 @@
+# ====================================================================
+# Deploy Pipeline - Option A: Triggered Deployment
+# ====================================================================
+# This pipeline automatically triggers when the build pipeline completes
+# and deploys the artifact from the SAME RUN that triggered it.
+#
+# KEY CONCEPT: By using $(resources.pipeline.myBuildPipeline.runID), we ensure
+# we download the artifact from the exact build that triggered this deployment,
+# maintaining branch consistency automatically.
+
+# Define the build pipeline as a resource
+resources:
+  pipelines:
+    - pipeline: myBuildPipeline  # Alias used to reference this pipeline
+      source: 'build-pipeline'    # Name of the build pipeline (must match the pipeline name in Azure DevOps)
+      trigger:
+        branches:
+          include:
+            - '*'  # Auto-trigger this deployment when build completes on ANY branch
+        # When the build pipeline completes on a branch, this pipeline will
+        # automatically trigger and receive the runID of that specific build
+
+# No manual triggers - this pipeline should only run when triggered by the build pipeline
+trigger: none
+
+# No PR triggers
+pr: none
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  # The artifact name must match what the build pipeline published
+  artifactName: 'drop'
+
+stages:
+  - stage: Deploy
+    displayName: 'Deploy Stage'
+    jobs:
+      - job: DeployJob
+        displayName: 'Download and Deploy Artifact'
+        steps:
+          # Display information about the triggering build
+          - task: Bash@3
+            displayName: 'Show Triggering Build Information'
+            inputs:
+              targetType: 'inline'
+              script: |
+                echo "========================================="
+                echo "TRIGGERED DEPLOYMENT INFORMATION"
+                echo "========================================="
+                echo "This deployment was triggered by:"
+                echo "  Pipeline: $(resources.pipeline.myBuildPipeline.pipelineName)"
+                echo "  Run ID: $(resources.pipeline.myBuildPipeline.runID)"
+                echo "  Run Name: $(resources.pipeline.myBuildPipeline.runName)"
+                echo "  Source Branch: $(resources.pipeline.myBuildPipeline.sourceBranch)"
+                echo ""
+                echo "We will download the artifact from run ID: $(resources.pipeline.myBuildPipeline.runID)"
+                echo "This ensures we deploy the EXACT artifact that triggered this pipeline."
+                echo "========================================="
+
+          # Download the artifact from the SPECIFIC build run that triggered this pipeline
+          - task: DownloadPipelineArtifact@2
+            displayName: 'Download Artifact from Triggering Build'
+            inputs:
+              # CRITICAL: buildType 'specific' means we're downloading from a specific build run
+              buildType: 'specific'
+              
+              # Reference the build pipeline using the alias defined in resources
+              project: '$(System.TeamProject)'
+              definition: 'build-pipeline'  # The build pipeline name
+              
+              # CRITICAL: Use the runID from the triggering build resource
+              # $(resources.pipeline.myBuildPipeline.runID) contains the Build.BuildId
+              # of the build that triggered this deployment
+              # This guarantees we get the artifact from the correct build/branch
+              buildVersionToDownload: 'specific'
+              runId: '$(resources.pipeline.myBuildPipeline.runID)'
+              
+              # The artifact name to download (must match what was published)
+              artifactName: '$(artifactName)'
+              
+              # Where to download the artifact to
+              targetPath: '$(Pipeline.Workspace)/downloaded-artifact'
+
+          # Verify and display the downloaded artifact contents
+          - task: Bash@3
+            displayName: 'Verify Downloaded Artifact'
+            inputs:
+              targetType: 'inline'
+              script: |
+                echo "========================================="
+                echo "ARTIFACT VERIFICATION"
+                echo "========================================="
+                echo "Downloaded artifact contents:"
+                ls -la $(Pipeline.Workspace)/downloaded-artifact/
+                echo ""
+                echo "========================================="
+                echo "BUILD INFO FROM ARTIFACT:"
+                echo "========================================="
+                cat $(Pipeline.Workspace)/downloaded-artifact/build-info.txt
+                echo ""
+                echo "========================================="
+                echo "VERIFICATION SUMMARY:"
+                echo "========================================="
+                echo "✓ Artifact downloaded from Run ID: $(resources.pipeline.myBuildPipeline.runID)"
+                echo "✓ Source branch: $(resources.pipeline.myBuildPipeline.sourceBranch)"
+                echo ""
+                echo "The build info above should match the triggering build information."
+                echo "This confirms we deployed the artifact from the correct branch/build."
+                echo "========================================="
+
+          # Simulate deployment step
+          - task: Bash@3
+            displayName: 'Deploy Application'
+            inputs:
+              targetType: 'inline'
+              script: |
+                echo "========================================="
+                echo "DEPLOYING APPLICATION"
+                echo "========================================="
+                echo "Deploying artifact from:"
+                echo "  Build Run: $(resources.pipeline.myBuildPipeline.runID)"
+                echo "  Branch: $(resources.pipeline.myBuildPipeline.sourceBranch)"
+                echo ""
+                echo "Deployment completed successfully!"
+                echo "========================================="
