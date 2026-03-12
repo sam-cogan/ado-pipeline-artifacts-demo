@@ -12,7 +12,7 @@
 resources:
   pipelines:
     - pipeline: myBuildPipeline  # Alias used to reference this pipeline
-      source: 'build-pipeline'    # Name of the build pipeline (must match the pipeline name in Azure DevOps)
+      source: 'Build'    # Name of the build pipeline (must match the pipeline name in Azure DevOps)
       trigger:
         branches:
           include:
