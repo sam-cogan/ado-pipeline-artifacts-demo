@@ -12,7 +12,7 @@
 resources:
   pipelines:
     - pipeline: myBuildPipeline  # Alias used to reference this pipeline
-      source: 'build-pipeline'    # Name of the build pipeline (must match the pipeline name in Azure DevOps)
+      source: 'build-app'    # Name of the build pipeline (must match the pipeline name in Azure DevOps)
       trigger:
         branches:
           include:
@@ -68,7 +68,7 @@ stages:
               
               # Reference the build pipeline using the alias defined in resources
               project: '$(System.TeamProject)'
-              definition: 'Build'  # The build pipeline name
+              definition: 'build-app'  # The build pipeline name
               
               # CRITICAL: Use the runID from the triggering build resource
               # $(resources.pipeline.myBuildPipeline.runID) contains the Build.BuildId
