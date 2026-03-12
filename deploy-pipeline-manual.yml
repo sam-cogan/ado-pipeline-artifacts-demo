@@ -61,7 +61,7 @@ stages:
               
               # Reference the build pipeline
               project: '$(System.TeamProject)'
-              definition: 'build-pipeline'  # The build pipeline name
+              definition: 'Build'  # The build pipeline name
               
               # CRITICAL: Download the latest successful build from the current branch
               # Build.SourceBranch already includes the full ref path (refs/heads/branch-name)
